@@ -12,7 +12,7 @@ import cloudinary.uploader
 import requests
 
 GRAPH_API_VERSION = "v21.0"
-GRAPH_API_BASE = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
+GRAPH_API_BASE = f"https://graph.instagram.com/{GRAPH_API_VERSION}"
 
 PENDING_DIR = Path("clips/pending")
 POSTED_DIR = Path("clips/posted")
@@ -115,7 +115,7 @@ def archive_clip(clip_path: Path, caption_path: Path) -> None:
 
 
 def main() -> int:
-    ig_user_id = require_env("IG_BUSINESS_ACCOUNT_ID")
+    ig_user_id = require_env("IG_USER_ID")
     access_token = require_env("IG_ACCESS_TOKEN")
     configure_cloudinary()
 
