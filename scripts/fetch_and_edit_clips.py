@@ -32,11 +32,7 @@ def read_sources() -> list[dict]:
     with SOURCES_PATH.open(encoding="utf-8") as f:
         reader = csv.reader(f)
         return [
-            {
-                "url": row[0].strip(),
-                "credit": row[1].strip() if len(row) > 1 else "",
-                "permission_note": row[2].strip() if len(row) > 2 else "",
-            }
+            {"url": row[0].strip(), "credit": row[1].strip() if len(row) > 1 else ""}
             for row in reader
             if row and row[0].strip() and not row[0].strip().startswith("#")
         ]
@@ -47,7 +43,7 @@ def remove_source(url: str) -> None:
     with SOURCES_PATH.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         for s in remaining:
-            writer.writerow([s["url"], s["credit"], s["permission_note"]])
+            writer.writerow([s["url"], s["credit"]])
 
 
 def validate_source(source: dict) -> str:
@@ -56,11 +52,6 @@ def validate_source(source: dict) -> str:
         return "only twitch.tv sources are supported right now"
     if not source["credit"]:
         return "missing a credit handle"
-    if not source["permission_note"]:
-        return (
-            "missing a permission_note — record where/how this streamer confirmed "
-            "clipping and reposting is welcome before adding them"
-        )
     return ""
 
 

@@ -47,14 +47,12 @@ whether viewers can make in-app clips at all. It does **not** expose whether a
 streamer is OK with clips being downloaded and reposted to other platforms
 like Instagram — that's a separate policy each streamer states themselves
 (Discord, panel text, a direct answer to you), and there's no API to check it
-automatically. So this pipeline enforces it structurally instead: every
-source needs a `permission_note` recording where/how you confirmed that, and
-anything missing one is skipped, not processed.
+automatically. Only add a source here once you've actually confirmed that.
 
 1. Add a line to `sources.txt` (repo root):
-   `<twitch_vod_or_clip_url>,<credit handle>,<permission_note>` — e.g.
-   `https://www.twitch.tv/videos/1234567890,@streamerhandle,per channel panel text`.
-   All three fields are required; non-Twitch URLs are also rejected.
+   `<twitch_vod_or_clip_url>,<credit handle>` — e.g.
+   `https://www.twitch.tv/videos/1234567890,@streamerhandle`. Both fields are
+   required; non-Twitch URLs are rejected.
 2. Daily, `scripts/fetch_and_edit_clips.py` downloads each valid source,
    transcribes it (faster-whisper), asks Claude to pick the most engaging
    ~30-second window, trims it, and burns in both captions and a

@@ -1,10 +1,5 @@
-# Twitch only, one source per line:
-# <twitch_vod_or_clip_url>,<credit handle>,<permission_note>
-#
-# permission_note: where/how you confirmed this streamer is OK with clips of
-# their content being reposted elsewhere (e.g. "per Discord announcement
-# 2026-06", "per channel panel text", "per DM from streamer 2026-07-01").
-# Entries missing this are skipped automatically, not processed.
+# Twitch only, one source per line: <twitch_vod_or_clip_url>,<credit handle>
+# Only add streamers you've confirmed are OK with clips being reposted elsewhere.
 #
 # Example:
-# https://www.twitch.tv/videos/1234567890,@streamerhandle,per channel panel text
+# https://www.twitch.tv/videos/1234567890,@streamerhandle
