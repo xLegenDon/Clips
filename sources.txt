@@ -5,3 +5,4 @@
 #
 # Example:
 # https://www.twitch.tv/videos/1234567890
+https://www.twitch.tv/xlegendon/clip/PrettySpotlessAnacondaImGlitch-JJJsWuOX7mJG0TZG?filter=clips&range=7d

@@ -191,10 +191,9 @@ def main() -> int:
 
         try:
             process_source(url)
-        except Exception as exc:  # noqa: BLE001 - report and continue with remaining sources
-            print(f"Failed to process {url}: {exc}")
-        finally:
             remove_source(url)
+        except Exception as exc:  # noqa: BLE001 - report and continue with remaining sources
+            print(f"Failed to process {url}: {exc} (left in sources.txt — will retry next run)")
 
     return 0
 
