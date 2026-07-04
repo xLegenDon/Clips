@@ -49,20 +49,19 @@ like Instagram — that's a separate policy each streamer states themselves
 (Discord, panel text, a direct answer to you), and there's no API to check it
 automatically. Only add a source here once you've actually confirmed that.
 
-1. Add a line to `sources.txt` (repo root):
-   `<twitch_vod_or_clip_url>,<credit handle>` — e.g.
-   `https://www.twitch.tv/videos/1234567890,@streamerhandle`. Both fields are
-   required; non-Twitch URLs are rejected.
-2. Daily, `scripts/fetch_and_edit_clips.py` downloads each valid source,
-   transcribes it (faster-whisper), asks Claude to pick the most engaging
-   ~30-second window, trims it, and burns in both captions and a
-   **watermark crediting the streamer** directly into the video (plus a
-   caption file with the same credit, for the post text). The result goes
-   into `clips/pending/` — where your existing posting pipeline picks it up
-   like any other clip.
+1. Add a line to `sources.txt` (repo root): just the URL, e.g.
+   `https://www.twitch.tv/videos/1234567890`. Non-Twitch URLs are rejected.
+2. Daily, `scripts/fetch_and_edit_clips.py` looks up the channel/uploader for
+   each valid source (via yt-dlp, from the URL itself — no manual credit
+   field needed), downloads it, transcribes it (faster-whisper), asks Claude
+   to pick the most engaging ~30-second window, trims it, and burns in both
+   captions and a **watermark crediting that channel** directly into the
+   video (plus a caption file with the same credit, for the post text). The
+   result goes into `clips/pending/` — where your existing posting pipeline
+   picks it up like any other clip.
 3. Sources that were actually processed are removed from `sources.txt`
-   automatically. Sources skipped for missing/invalid fields are left in
-   place so you notice and fix them.
+   automatically. Sources skipped for being non-Twitch are left in place so
+   you notice and fix them.
 
 This needs one more secret: `ANTHROPIC_API_KEY` (from
 https://console.anthropic.com/settings/keys) — add it the same way as the

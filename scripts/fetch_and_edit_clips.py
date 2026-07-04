@@ -4,7 +4,6 @@ highlight with Claude, trim, burn in captions, and drop into
 clips/pending/. Sources come from sources.txt (one per line, curated —
 see README before adding a channel)."""
 
-import csv
 import json
 import os
 import re
@@ -26,33 +25,33 @@ TWITCH_URL_PATTERN = re.compile(r"^https?://(www\.|clips\.|m\.)?twitch\.tv/", re
 client = anthropic.Anthropic()
 
 
-def read_sources() -> list[dict]:
+def read_sources() -> list[str]:
     if not SOURCES_PATH.exists():
         return []
-    with SOURCES_PATH.open(encoding="utf-8") as f:
-        reader = csv.reader(f)
-        return [
-            {"url": row[0].strip(), "credit": row[1].strip() if len(row) > 1 else ""}
-            for row in reader
-            if row and row[0].strip() and not row[0].strip().startswith("#")
-        ]
+    lines = SOURCES_PATH.read_text(encoding="utf-8").splitlines()
+    return [line.strip() for line in lines if line.strip() and not line.strip().startswith("#")]
 
 
 def remove_source(url: str) -> None:
-    remaining = [s for s in read_sources() if s["url"] != url]
-    with SOURCES_PATH.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        for s in remaining:
-            writer.writerow([s["url"], s["credit"]])
+    lines = SOURCES_PATH.read_text(encoding="utf-8").splitlines()
+    remaining = [line for line in lines if line.strip() != url]
+    SOURCES_PATH.write_text("\n".join(remaining) + ("\n" if remaining else ""), encoding="utf-8")
 
 
-def validate_source(source: dict) -> str:
+def validate_source(url: str) -> str:
     """Returns an error message, or an empty string if the source is clear to process."""
-    if not TWITCH_URL_PATTERN.match(source["url"]):
+    if not TWITCH_URL_PATTERN.match(url):
         return "only twitch.tv sources are supported right now"
-    if not source["credit"]:
-        return "missing a credit handle"
     return ""
+
+
+def get_channel_credit(url: str) -> str:
+    with yt_dlp.YoutubeDL({"quiet": True}) as ydl:
+        info = ydl.extract_info(url, download=False)
+    channel = info.get("uploader_id") or info.get("uploader") or info.get("channel")
+    if not channel:
+        raise ValueError(f"Could not determine the channel/uploader for {url}")
+    return f"@{channel}"
 
 
 def download_video(url: str, out_path: Path) -> None:
@@ -150,9 +149,9 @@ def write_caption_file(caption_path: Path, reason: str, credit: str) -> None:
     caption_path.write_text("\n\n".join(lines), encoding="utf-8")
 
 
-def process_source(source: dict) -> None:
-    url, credit = source["url"], source["credit"]
-    print(f"Processing {url} (credit: {credit or 'none'})...")
+def process_source(url: str) -> None:
+    credit = get_channel_credit(url)
+    print(f"Processing {url} (credit: {credit})...")
 
     WORK_DIR.mkdir(exist_ok=True)
     raw_path = WORK_DIR / "raw.mp4"
@@ -184,18 +183,18 @@ def main() -> int:
         print("No sources in sources.txt. Nothing to fetch.")
         return 0
 
-    for source in sources:
-        error = validate_source(source)
+    for url in sources:
+        error = validate_source(url)
         if error:
-            print(f"Skipping {source['url']}: {error} (left in sources.txt — fix and it'll be retried)")
+            print(f"Skipping {url}: {error} (left in sources.txt — fix and it'll be retried)")
             continue
 
         try:
-            process_source(source)
+            process_source(url)
         except Exception as exc:  # noqa: BLE001 - report and continue with remaining sources
-            print(f"Failed to process {source['url']}: {exc}")
+            print(f"Failed to process {url}: {exc}")
         finally:
-            remove_source(source["url"])
+            remove_source(url)
 
     return 0
 
