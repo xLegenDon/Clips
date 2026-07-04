@@ -1,4 +1,10 @@
-# One source per line: <video_or_vod_url>,<credit handle to tag in the caption>
-# Only add channels/streamers who've explicitly said clipping/reposting is welcome.
+# Twitch only, one source per line:
+# <twitch_vod_or_clip_url>,<credit handle>,<permission_note>
+#
+# permission_note: where/how you confirmed this streamer is OK with clips of
+# their content being reposted elsewhere (e.g. "per Discord announcement
+# 2026-06", "per channel panel text", "per DM from streamer 2026-07-01").
+# Entries missing this are skipped automatically, not processed.
+#
 # Example:
-# https://www.youtube.com/watch?v=XXXXXXXXXXX,@streamerhandle
+# https://www.twitch.tv/videos/1234567890,@streamerhandle,per channel panel text

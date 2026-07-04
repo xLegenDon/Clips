@@ -38,20 +38,33 @@ Three more workflows run on their own schedule:
 ## Auto-editing source clips
 
 Instead of manually trimming and captioning clips yourself, you can point
-this at full source videos and let it do the editing:
+this at full Twitch VODs/clips and let it do the editing. **Twitch only for
+now** — other platforms aren't supported.
 
-1. Add a line to `sources.txt` (repo root): `<video_url>,<credit handle>` —
-   e.g. `https://www.youtube.com/watch?v=XXXXXXXXXXX,@streamerhandle`.
-   **Only add sources whose creators have explicitly said clipping/reposting
-   their content is welcome** — this downloads and republishes someone
-   else's video, which is copyright infringement without that permission,
-   automation or not.
-2. Daily, `scripts/fetch_and_edit_clips.py` downloads each source, transcribes
-   it (faster-whisper), asks Claude to pick the most engaging ~30-second
-   window, trims it, burns in captions, and writes the result plus a caption
-   file (crediting the source) into `clips/pending/` — where your existing
-   posting pipeline picks it up like any other clip.
-3. Processed sources are removed from `sources.txt` automatically.
+**Important — permission, not just "clips are allowed":** Twitch's on-platform
+clipping toggle (Creator Dashboard → Settings → Stream → Clips) only controls
+whether viewers can make in-app clips at all. It does **not** expose whether a
+streamer is OK with clips being downloaded and reposted to other platforms
+like Instagram — that's a separate policy each streamer states themselves
+(Discord, panel text, a direct answer to you), and there's no API to check it
+automatically. So this pipeline enforces it structurally instead: every
+source needs a `permission_note` recording where/how you confirmed that, and
+anything missing one is skipped, not processed.
+
+1. Add a line to `sources.txt` (repo root):
+   `<twitch_vod_or_clip_url>,<credit handle>,<permission_note>` — e.g.
+   `https://www.twitch.tv/videos/1234567890,@streamerhandle,per channel panel text`.
+   All three fields are required; non-Twitch URLs are also rejected.
+2. Daily, `scripts/fetch_and_edit_clips.py` downloads each valid source,
+   transcribes it (faster-whisper), asks Claude to pick the most engaging
+   ~30-second window, trims it, and burns in both captions and a
+   **watermark crediting the streamer** directly into the video (plus a
+   caption file with the same credit, for the post text). The result goes
+   into `clips/pending/` — where your existing posting pipeline picks it up
+   like any other clip.
+3. Sources that were actually processed are removed from `sources.txt`
+   automatically. Sources skipped for missing/invalid fields are left in
+   place so you notice and fix them.
 
 This needs one more secret: `ANTHROPIC_API_KEY` (from
 https://console.anthropic.com/settings/keys) — add it the same way as the
@@ -65,7 +78,10 @@ pre-edited clips into `clips/pending/` instead, or do both.
 
 Note: transcription runs on GitHub's hosted (CPU-only) runners, so long
 source videos will be slow to process — this works best on already-short
-VODs or highlight reels rather than multi-hour streams.
+VODs or highlight reels rather than multi-hour streams. Also note that
+downloading Twitch VODs with automated tools sits in a gray area of
+Twitch's own Terms of Service regardless of the streamer's personal
+blessing — worth knowing, not just a copyright question.
 
 ## One-time setup (you need to do this — I can't create accounts or
 authenticate as you)

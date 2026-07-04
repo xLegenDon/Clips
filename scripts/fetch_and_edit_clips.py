@@ -21,6 +21,7 @@ PENDING_DIR = Path("clips/pending")
 WORK_DIR = Path("clip_pipeline_tmp")
 HIGHLIGHT_LENGTH_SECONDS = 30
 WHISPER_MODEL_SIZE = "base"
+TWITCH_URL_PATTERN = re.compile(r"^https?://(www\.|clips\.|m\.)?twitch\.tv/", re.IGNORECASE)
 
 client = anthropic.Anthropic()
 
@@ -31,7 +32,11 @@ def read_sources() -> list[dict]:
     with SOURCES_PATH.open(encoding="utf-8") as f:
         reader = csv.reader(f)
         return [
-            {"url": row[0].strip(), "credit": row[1].strip() if len(row) > 1 else ""}
+            {
+                "url": row[0].strip(),
+                "credit": row[1].strip() if len(row) > 1 else "",
+                "permission_note": row[2].strip() if len(row) > 2 else "",
+            }
             for row in reader
             if row and row[0].strip() and not row[0].strip().startswith("#")
         ]
@@ -42,7 +47,21 @@ def remove_source(url: str) -> None:
     with SOURCES_PATH.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         for s in remaining:
-            writer.writerow([s["url"], s["credit"]])
+            writer.writerow([s["url"], s["credit"], s["permission_note"]])
+
+
+def validate_source(source: dict) -> str:
+    """Returns an error message, or an empty string if the source is clear to process."""
+    if not TWITCH_URL_PATTERN.match(source["url"]):
+        return "only twitch.tv sources are supported right now"
+    if not source["credit"]:
+        return "missing a credit handle"
+    if not source["permission_note"]:
+        return (
+            "missing a permission_note — record where/how this streamer confirmed "
+            "clipping and reposting is welcome before adding them"
+        )
+    return ""
 
 
 def download_video(url: str, out_path: Path) -> None:
@@ -111,11 +130,21 @@ def make_srt(segments: list[dict], start_offset: float, end_offset: float, out_p
             index += 1
 
 
-def burn_captions(video_path: Path, srt_path: Path, out_path: Path) -> None:
+def escape_for_drawtext(text: str) -> str:
+    return text.replace("\\", "\\\\").replace(":", "\\:").replace("'", "’").replace("%", "\\%")
+
+
+def burn_captions_and_watermark(video_path: Path, srt_path: Path, credit: str, out_path: Path) -> None:
+    watermark_text = escape_for_drawtext(f"Clip via {credit}")
+    drawtext = (
+        f"drawtext=text='{watermark_text}':fontsize=20:fontcolor=white"
+        ":box=1:boxcolor=black@0.5:boxborderw=8:x=20:y=h-th-20"
+    )
+    subtitles = f"subtitles={srt_path}:force_style='FontSize=18,PrimaryColour=&HFFFFFF&'"
     subprocess.run(
         [
             "ffmpeg", "-y", "-i", str(video_path),
-            "-vf", f"subtitles={srt_path}:force_style='FontSize=18,PrimaryColour=&HFFFFFF&'",
+            "-vf", f"{subtitles},{drawtext}",
             "-c:a", "copy", str(out_path),
         ],
         check=True,
@@ -148,7 +177,7 @@ def process_source(source: dict) -> None:
 
     clip_name = uuid.uuid4().hex[:8]
     final_path = PENDING_DIR / f"{clip_name}.mp4"
-    burn_captions(trimmed_path, srt_path, final_path)
+    burn_captions_and_watermark(trimmed_path, srt_path, credit, final_path)
     write_caption_file(PENDING_DIR / f"{clip_name}.txt", highlight.get("reason", ""), credit)
 
     for tmp_file in (raw_path, trimmed_path, srt_path):
@@ -165,6 +194,11 @@ def main() -> int:
         return 0
 
     for source in sources:
+        error = validate_source(source)
+        if error:
+            print(f"Skipping {source['url']}: {error} (left in sources.txt — fix and it'll be retried)")
+            continue
+
         try:
             process_source(source)
         except Exception as exc:  # noqa: BLE001 - report and continue with remaining sources
