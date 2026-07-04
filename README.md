@@ -1,9 +1,11 @@
 # Clips — Daily Instagram Reel Poster
 
-Automatically posts up to 10 clips a day from `clips/pending/` to Instagram as Reels,
+Automatically posts clips from `clips/pending/` to Instagram as Reels,
 using the **Instagram API with Instagram Login** (Content Publishing). GitHub
-Actions runs the posting script 10 times a day, spreading the day's clips out
-instead of posting them all in one burst.
+Actions runs the posting script every 45 minutes (32 times a day), spreading
+posts out instead of posting them all in one burst. Aim for around 20 clips/
+day in `clips/pending/` — see the schedule comment in `daily-post.yml` for
+why you shouldn't push much past ~24 (Instagram's own API cap).
 
 ## How it works
 
@@ -12,9 +14,9 @@ instead of posting them all in one burst.
    next to it, e.g. `clip_01.mp4` + `clip_01.txt`. The contents of
    `hashtags.txt` (repo root) are automatically appended to every caption —
    edit that file to change your default hashtags.
-3. Every 2 hours, GitHub Actions runs `scripts/post_daily_clips.py`, which:
-   - picks up to `DAILY_POST_LIMIT` (1 per scheduled run, so 10/day total)
-     pending clips, oldest filename first
+3. Every 45 minutes, GitHub Actions runs `scripts/post_daily_clips.py`, which:
+   - picks up to `DAILY_POST_LIMIT` (1 per scheduled run) pending clips,
+     oldest filename first
    - uploads each clip to Cloudinary to get a public video URL
    - creates an Instagram Reels media container via the Graph API
    - waits for Instagram to finish processing the video
@@ -168,9 +170,9 @@ web UI) and push to `main`.
 
 ### 10. Merge this branch to `main`
 The workflows only run from the default branch's schedule. Once merged,
-`daily-post.yml` fires every 2 hours (edit the cron to change timing), the
-token refresh runs weekly, and insights are updated daily. Any of them can
-also be triggered manually from the Actions tab ("Run workflow").
+`daily-post.yml` fires every 45 minutes (edit the cron entries to change
+timing), the token refresh runs weekly, and insights are updated daily. Any
+of them can also be triggered manually from the Actions tab ("Run workflow").
 
 ## Local testing
 
@@ -184,7 +186,8 @@ python scripts/post_daily_clips.py
 ## Notes and limits
 
 - Instagram's Content Publishing API caps an account at 25 posts per rolling
-  24 hours; posting 10/day is well within that.
+  24 hours. The schedule has 32 slots/day, but keep actual clip supply
+  around 20/day (don't push much past ~24) so you stay safely under that cap.
 - Long-lived tokens expire after ~60 days. With `GH_PAT` configured, the
   weekly refresh workflow handles this automatically. Without it, run
   `scripts/refresh_token.py` manually and update the `IG_ACCESS_TOKEN`
