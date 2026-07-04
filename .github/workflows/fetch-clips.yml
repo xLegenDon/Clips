@@ -1,0 +1,34 @@
+name: Fetch and Edit Clips
+
+on:
+  schedule:
+    - cron: "0 23 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  fetch-clips:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements-clip-pipeline.txt
+
+      - name: Fetch and edit clips
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scripts/fetch_and_edit_clips.py
+
+      - name: Commit new clips
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add clips/pending/ sources.txt
+          git diff --cached --quiet || git commit -m "Add auto-edited clips [skip ci]"
+          git push

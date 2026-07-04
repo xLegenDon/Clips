@@ -26,12 +26,46 @@ Instagram's API requires each video to be reachable at a public HTTPS
 URL — it cannot accept a direct file upload. Cloudinary's free tier is used
 to get that public URL without needing to make this repo public.
 
-Two more workflows run on their own schedule:
+Three more workflows run on their own schedule:
+- **Fetch and Edit Clips** (daily) — turns raw source VODs into edited clips
+  automatically. See "Auto-editing source clips" below.
 - **Refresh Instagram Token** (weekly) — refreshes `IG_ACCESS_TOKEN` and
   writes the new value back into the repo secret automatically, so it never
   expires unattended. See setup step 8 for what this needs.
 - **Update Reel Insights** (daily) — fetches reach/likes/comments/etc. for
   every posted clip and appends them to `clips/insights_log.csv`.
+
+## Auto-editing source clips
+
+Instead of manually trimming and captioning clips yourself, you can point
+this at full source videos and let it do the editing:
+
+1. Add a line to `sources.txt` (repo root): `<video_url>,<credit handle>` —
+   e.g. `https://www.youtube.com/watch?v=XXXXXXXXXXX,@streamerhandle`.
+   **Only add sources whose creators have explicitly said clipping/reposting
+   their content is welcome** — this downloads and republishes someone
+   else's video, which is copyright infringement without that permission,
+   automation or not.
+2. Daily, `scripts/fetch_and_edit_clips.py` downloads each source, transcribes
+   it (faster-whisper), asks Claude to pick the most engaging ~30-second
+   window, trims it, burns in captions, and writes the result plus a caption
+   file (crediting the source) into `clips/pending/` — where your existing
+   posting pipeline picks it up like any other clip.
+3. Processed sources are removed from `sources.txt` automatically.
+
+This needs one more secret: `ANTHROPIC_API_KEY` (from
+https://console.anthropic.com/settings/keys) — add it the same way as the
+other repo secrets. Each Claude API call to pick a highlight costs a small
+amount; check current pricing at https://claude.com/pricing before running
+this against many sources.
+
+This step is optional — if you don't add anything to `sources.txt`, the
+workflow just finds nothing to do and exits. You can keep manually dropping
+pre-edited clips into `clips/pending/` instead, or do both.
+
+Note: transcription runs on GitHub's hosted (CPU-only) runners, so long
+source videos will be slow to process — this works best on already-short
+VODs or highlight reels rather than multi-hour streams.
 
 ## One-time setup (you need to do this — I can't create accounts or
 authenticate as you)

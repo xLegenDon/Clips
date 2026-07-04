@@ -1,0 +1,4 @@
+# One source per line: <video_or_vod_url>,<credit handle to tag in the caption>
+# Only add channels/streamers who've explicitly said clipping/reposting is welcome.
+# Example:
+# https://www.youtube.com/watch?v=XXXXXXXXXXX,@streamerhandle
