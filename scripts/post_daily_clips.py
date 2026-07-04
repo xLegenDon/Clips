@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Post up to DAILY_POST_LIMIT pending clips to Instagram as Reels."""
 
+import csv
 import json
 import os
 import sys
@@ -16,6 +17,8 @@ GRAPH_API_BASE = f"https://graph.instagram.com/{GRAPH_API_VERSION}"
 
 PENDING_DIR = Path("clips/pending")
 POSTED_DIR = Path("clips/posted")
+POSTED_LOG_PATH = Path("clips/posted_log.csv")
+HASHTAGS_PATH = Path("hashtags.txt")
 VIDEO_EXTENSIONS = {".mp4", ".mov"}
 
 DAILY_POST_LIMIT = int(os.environ.get("DAILY_POST_LIMIT", "10"))
@@ -41,9 +44,20 @@ def configure_cloudinary() -> None:
 
 def load_caption(clip_path: Path) -> str:
     caption_path = clip_path.with_suffix(".txt")
-    if caption_path.exists():
-        return caption_path.read_text(encoding="utf-8").strip()
-    return ""
+    caption = caption_path.read_text(encoding="utf-8").strip() if caption_path.exists() else ""
+    hashtags = HASHTAGS_PATH.read_text(encoding="utf-8").strip() if HASHTAGS_PATH.exists() else ""
+    if caption and hashtags:
+        return f"{caption}\n\n{hashtags}"
+    return caption or hashtags
+
+
+def log_posted_clip(clip_path: Path, media_id: str) -> None:
+    is_new = not POSTED_LOG_PATH.exists()
+    with POSTED_LOG_PATH.open("a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        if is_new:
+            writer.writerow(["date", "clip", "media_id"])
+        writer.writerow([time.strftime("%Y-%m-%d"), clip_path.name, media_id])
 
 
 def select_pending_clips(limit: int) -> list[Path]:
@@ -143,6 +157,7 @@ def main() -> int:
             media_id = publish_container(ig_user_id, access_token, creation_id)
 
             print(f"Posted {clip_path.name} -> media id {media_id}")
+            log_posted_clip(clip_path, media_id)
             archive_clip(clip_path, caption_path)
             results.append({"clip": clip_path.name, "status": "posted", "media_id": media_id})
         except Exception as exc:  # noqa: BLE001 - report and continue with remaining clips

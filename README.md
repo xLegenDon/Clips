@@ -1,25 +1,37 @@
 # Clips — Daily Instagram Reel Poster
 
 Automatically posts up to 10 clips a day from `clips/pending/` to Instagram as Reels,
-using the **Instagram API with Instagram Login** (Content Publishing). A GitHub
-Actions workflow runs the script once a day.
+using the **Instagram API with Instagram Login** (Content Publishing). GitHub
+Actions runs the posting script 10 times a day, spreading the day's clips out
+instead of posting them all in one burst.
 
 ## How it works
 
 1. Drop video files (`.mp4` or `.mov`) into `clips/pending/`.
 2. Optionally add a caption for a clip by creating a same-named `.txt` file
-   next to it, e.g. `clip_01.mp4` + `clip_01.txt`.
-3. Once a day, GitHub Actions runs `scripts/post_daily_clips.py`, which:
-   - picks up to `DAILY_POST_LIMIT` (default 10) pending clips, oldest filename first
+   next to it, e.g. `clip_01.mp4` + `clip_01.txt`. The contents of
+   `hashtags.txt` (repo root) are automatically appended to every caption —
+   edit that file to change your default hashtags.
+3. Every 2 hours, GitHub Actions runs `scripts/post_daily_clips.py`, which:
+   - picks up to `DAILY_POST_LIMIT` (1 per scheduled run, so 10/day total)
+     pending clips, oldest filename first
    - uploads each clip to Cloudinary to get a public video URL
    - creates an Instagram Reels media container via the Graph API
    - waits for Instagram to finish processing the video
    - publishes it
+   - logs the result to `clips/posted_log.csv` (used for insights tracking)
    - moves the posted clip (and caption) into `clips/posted/<date>/`
 
 Instagram's API requires each video to be reachable at a public HTTPS
 URL — it cannot accept a direct file upload. Cloudinary's free tier is used
 to get that public URL without needing to make this repo public.
+
+Two more workflows run on their own schedule:
+- **Refresh Instagram Token** (weekly) — refreshes `IG_ACCESS_TOKEN` and
+  writes the new value back into the repo secret automatically, so it never
+  expires unattended. See setup step 8 for what this needs.
+- **Update Reel Insights** (daily) — fetches reach/likes/comments/etc. for
+  every posted clip and appends them to `clips/insights_log.csv`.
 
 ## One-time setup (you need to do this — I can't create accounts or
 authenticate as you)
@@ -84,15 +96,34 @@ for each of:
 - `CLOUDINARY_API_KEY`
 - `CLOUDINARY_API_SECRET`
 
-### 8. Upload clips
+### 8. Create a `GH_PAT` secret (only needed for automatic token refresh)
+The **Refresh Instagram Token** workflow updates the `IG_ACCESS_TOKEN`
+secret itself, but the default Actions token can't modify repo secrets —
+that needs a personal access token with elevated permission:
+
+1. GitHub → your profile picture → **Settings** → **Developer settings** →
+   **Personal access tokens** → **Fine-grained tokens** → **Generate new token**
+2. Set **Repository access** to only this repo (`xLegenDon/Clips`)
+3. Under **Permissions → Repository permissions**, set **Secrets** to
+   **Read and write**
+4. Generate it, copy the token, and add it as a repo secret named `GH_PAT`
+   (same place as the other secrets)
+
+This token is more sensitive than the others (it can write secrets on this
+repo), so scope it to this repo only and treat it carefully. If you'd
+rather skip this, don't create `GH_PAT` — the refresh workflow will just
+fail harmlessly each week, and you can keep refreshing manually with
+`scripts/refresh_token.py` instead.
+
+### 9. Upload clips
 Add video files to `clips/pending/` (via a normal commit/PR, or the GitHub
 web UI) and push to `main`.
 
-### 9. Merge this branch to `main`
-The workflow only runs from the default branch's schedule. Once merged, it
-fires daily at 16:00 UTC (edit the cron in
-`.github/workflows/daily-post.yml` to change the time), or can be triggered
-manually from the Actions tab ("Run workflow").
+### 10. Merge this branch to `main`
+The workflows only run from the default branch's schedule. Once merged,
+`daily-post.yml` fires every 2 hours (edit the cron to change timing), the
+token refresh runs weekly, and insights are updated daily. Any of them can
+also be triggered manually from the Actions tab ("Run workflow").
 
 ## Local testing
 
@@ -107,11 +138,17 @@ python scripts/post_daily_clips.py
 
 - Instagram's Content Publishing API caps an account at 25 posts per rolling
   24 hours; posting 10/day is well within that.
-- Long-lived tokens expire after ~60 days. Run `scripts/refresh_token.py`
-  periodically and update the `IG_ACCESS_TOKEN` secret, or posting will
-  silently start failing once it expires.
+- Long-lived tokens expire after ~60 days. With `GH_PAT` configured, the
+  weekly refresh workflow handles this automatically. Without it, run
+  `scripts/refresh_token.py` manually and update the `IG_ACCESS_TOKEN`
+  secret, or posting will silently start failing once it expires.
 - Reels requirements (as of this writing): MP4/MOV, H.264 video, AAC audio,
   9:16 recommended aspect ratio, up to ~1GB / several minutes. Check Meta's
   current docs if a clip fails to process.
 - The workflow commits moved files back to the repo after each run, so
   `clips/pending/` only ever holds unposted clips.
+- `clips/posted_log.csv` records every posted clip's media ID, which
+  `scripts/update_insights.py` uses to look up metrics — don't delete it.
+- `clips/insights_log.csv` accumulates a time-series of metrics per clip
+  (each daily run appends a new row per clip, so you can track growth over
+  time, not just a snapshot).

@@ -2,8 +2,15 @@ name: Daily Instagram Clip Posting
 
 on:
   schedule:
-    - cron: "0 16 * * *"
-  workflow_dispatch: {}
+    # 10 runs/day, 2 hours apart, each posting one clip so the day's 10
+    # clips are spread out instead of posted in a single burst.
+    - cron: "0 0,2,4,6,8,10,12,14,16,18 * * *"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "How many clips to post this run"
+        required: false
+        default: "1"
 
 jobs:
   post-clips:
@@ -26,6 +33,7 @@ jobs:
           CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
           CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
           CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+          DAILY_POST_LIMIT: ${{ github.event.inputs.limit || '1' }}
         run: python scripts/post_daily_clips.py
 
       - name: Commit archived clips
