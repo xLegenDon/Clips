@@ -82,6 +82,56 @@ downloading Twitch VODs with automated tools sits in a gray area of
 Twitch's own Terms of Service regardless of the streamer's personal
 blessing — worth knowing, not just a copyright question.
 
+## Auto-editing your own recordings (local tool)
+
+`scripts/stream_clipper.py` is a separate tool for your own OBS recordings —
+since this is your own content, there's no permission/copyright question
+like the Twitch source above. It runs on **your own machine**, not GitHub
+Actions, because it needs access to your local recording files.
+
+It extracts audio, transcribes with faster-whisper, asks Claude to pick up
+to `NUM_CLIPS` clip-worthy moments, cuts and converts each to a 1080x1920
+vertical clip, and writes `<clip>.mp4` + `<clip>.txt` pairs — the same
+format `clips/pending/` expects.
+
+**Setup:**
+```
+pip install -r requirements-stream-clipper.txt
+# ffmpeg + ffprobe must be on your PATH (winget/brew/apt install ffmpeg)
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+**Usage:**
+```
+python scripts/stream_clipper.py "D:/OBS/2026-07-05 stream.mkv"
+# or watch a folder and process every finished recording automatically:
+python scripts/stream_clipper.py --watch "D:/OBS"
+```
+Watch mode waits until a file stops growing for 30s (OBS finished writing)
+before processing, and remembers what it already handled in
+`.processed_vods.json`.
+
+**Getting clips into this repo:** set two env vars before running —
+```
+export CLIP_OUTPUT_DIR="/path/to/your/local/clone/clips/pending"
+export GIT_REPO_DIR="/path/to/your/local/clone"
+```
+With both set, finished clips land directly in your local clone's
+`clips/pending/` and get auto-committed and pushed after each recording is
+processed. Leave `GIT_REPO_DIR` unset to just write clips locally without
+touching git.
+
+**Tuning** (top of `stream_clipper.py`): `NUM_CLIPS`, `MIN_CLIP_SEC`/
+`MAX_CLIP_SEC`, `WHISPER_MODEL` (`small` is a good default; set
+`WHISPER_DEVICE = "cuda"` if you have an NVIDIA GPU), `CLAUDE_MODEL`
+(Haiku is cheap/fast; Sonnet picks better moments on chaotic streams), and
+`VERTICAL_MODE` (`blurpad` is a safe default; `centercrop` fills the frame
+but cuts off the sides).
+
+**OBS tip:** record a separate local file at CQP/CRF ~18-20 ("Indistinguishable
+Quality") rather than relying on the Twitch VOD, which gets re-encoded at
+~6-8 Mbps and looks soft after cropping to vertical.
+
 ## One-time setup (you need to do this — I can't create accounts or
 authenticate as you)
 
