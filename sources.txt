@@ -1,0 +1,8 @@
+# Twitch only, one source URL per line (VOD or clip).
+# Only add streamers you've confirmed are OK with clips being reposted elsewhere.
+# The channel is credited automatically (both in the caption and as an
+# on-video watermark) by looking up the uploader from the URL itself.
+#
+# Example:
+# https://www.twitch.tv/videos/1234567890
+https://www.twitch.tv/xlegendon/clip/PrettySpotlessAnacondaImGlitch-JJJsWuOX7mJG0TZG?filter=clips&range=7d

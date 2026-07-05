@@ -2,9 +2,17 @@ name: Daily Instagram Clip Posting
 
 on:
   schedule:
-    # 10 runs/day, 2 hours apart, each posting one clip so the day's 10
-    # clips are spread out instead of posted in a single burst.
-    - cron: "0 0,2,4,6,8,10,12,14,16,18 * * *"
+    # Every 45 minutes, each posting one clip (32 slots/day). 45 doesn't
+    # divide 60 evenly, so this is expressed as a repeating 3-hour cycle
+    # (:00, :45, +1h30 -> :30, +1h15 -> :15, then the cycle repeats every
+    # 3 hours) rather than a single cron expression. With ~20 clips/day
+    # supplied, the later slots each day just find nothing pending and
+    # exit — Instagram's API hard-caps at 25 posts/24h regardless, so
+    # don't push daily supply much past ~20-24.
+    - cron: "0 0,3,6,9,12,15,18,21 * * *"
+    - cron: "45 0,3,6,9,12,15,18,21 * * *"
+    - cron: "30 1,4,7,10,13,16,19,22 * * *"
+    - cron: "15 2,5,8,11,14,17,20,23 * * *"
   workflow_dispatch:
     inputs:
       limit:

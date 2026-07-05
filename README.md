@@ -1,9 +1,11 @@
 # Clips — Daily Instagram Reel Poster
 
-Automatically posts up to 10 clips a day from `clips/pending/` to Instagram as Reels,
+Automatically posts clips from `clips/pending/` to Instagram as Reels,
 using the **Instagram API with Instagram Login** (Content Publishing). GitHub
-Actions runs the posting script 10 times a day, spreading the day's clips out
-instead of posting them all in one burst.
+Actions runs the posting script every 45 minutes (32 times a day), spreading
+posts out instead of posting them all in one burst. Aim for around 20 clips/
+day in `clips/pending/` — see the schedule comment in `daily-post.yml` for
+why you shouldn't push much past ~24 (Instagram's own API cap).
 
 ## How it works
 
@@ -12,9 +14,9 @@ instead of posting them all in one burst.
    next to it, e.g. `clip_01.mp4` + `clip_01.txt`. The contents of
    `hashtags.txt` (repo root) are automatically appended to every caption —
    edit that file to change your default hashtags.
-3. Every 2 hours, GitHub Actions runs `scripts/post_daily_clips.py`, which:
-   - picks up to `DAILY_POST_LIMIT` (1 per scheduled run, so 10/day total)
-     pending clips, oldest filename first
+3. Every 45 minutes, GitHub Actions runs `scripts/post_daily_clips.py`, which:
+   - picks up to `DAILY_POST_LIMIT` (1 per scheduled run) pending clips,
+     oldest filename first
    - uploads each clip to Cloudinary to get a public video URL
    - creates an Instagram Reels media container via the Graph API
    - waits for Instagram to finish processing the video
@@ -26,12 +28,109 @@ Instagram's API requires each video to be reachable at a public HTTPS
 URL — it cannot accept a direct file upload. Cloudinary's free tier is used
 to get that public URL without needing to make this repo public.
 
-Two more workflows run on their own schedule:
+Three more workflows run on their own schedule:
+- **Fetch and Edit Clips** (daily) — turns raw source VODs into edited clips
+  automatically. See "Auto-editing source clips" below.
 - **Refresh Instagram Token** (weekly) — refreshes `IG_ACCESS_TOKEN` and
   writes the new value back into the repo secret automatically, so it never
   expires unattended. See setup step 8 for what this needs.
 - **Update Reel Insights** (daily) — fetches reach/likes/comments/etc. for
   every posted clip and appends them to `clips/insights_log.csv`.
+
+## Auto-editing source clips
+
+Instead of manually trimming and captioning clips yourself, you can point
+this at full Twitch VODs/clips and let it do the editing. **Twitch only for
+now** — other platforms aren't supported.
+
+**Important — permission, not just "clips are allowed":** Twitch's on-platform
+clipping toggle (Creator Dashboard → Settings → Stream → Clips) only controls
+whether viewers can make in-app clips at all. It does **not** expose whether a
+streamer is OK with clips being downloaded and reposted to other platforms
+like Instagram — that's a separate policy each streamer states themselves
+(Discord, panel text, a direct answer to you), and there's no API to check it
+automatically. Only add a source here once you've actually confirmed that.
+
+1. Add a line to `sources.txt` (repo root): just the URL, e.g.
+   `https://www.twitch.tv/videos/1234567890`. Non-Twitch URLs are rejected.
+2. Daily, `scripts/fetch_and_edit_clips.py` looks up the channel/uploader for
+   each valid source (via yt-dlp, from the URL itself — no manual credit
+   field needed), downloads it, transcribes it (faster-whisper), asks Claude
+   to pick the most engaging ~30-second window, trims it, and burns in both
+   captions and a **watermark crediting that channel** directly into the
+   video (plus a caption file with the same credit, for the post text). The
+   result goes into `clips/pending/` — where your existing posting pipeline
+   picks it up like any other clip.
+3. Sources that were actually processed are removed from `sources.txt`
+   automatically. Sources skipped for being non-Twitch are left in place so
+   you notice and fix them.
+
+This needs one more secret: `ANTHROPIC_API_KEY` (from
+https://console.anthropic.com/settings/keys) — add it the same way as the
+other repo secrets. Each Claude API call to pick a highlight costs a small
+amount; check current pricing at https://claude.com/pricing before running
+this against many sources.
+
+This step is optional — if you don't add anything to `sources.txt`, the
+workflow just finds nothing to do and exits. You can keep manually dropping
+pre-edited clips into `clips/pending/` instead, or do both.
+
+Note: transcription runs on GitHub's hosted (CPU-only) runners, so long
+source videos will be slow to process — this works best on already-short
+VODs or highlight reels rather than multi-hour streams. Also note that
+downloading Twitch VODs with automated tools sits in a gray area of
+Twitch's own Terms of Service regardless of the streamer's personal
+blessing — worth knowing, not just a copyright question.
+
+## Auto-editing your own recordings (local tool)
+
+`scripts/stream_clipper.py` is a separate tool for your own OBS recordings —
+since this is your own content, there's no permission/copyright question
+like the Twitch source above. It runs on **your own machine**, not GitHub
+Actions, because it needs access to your local recording files.
+
+It extracts audio, transcribes with faster-whisper, asks Claude to pick up
+to `NUM_CLIPS` clip-worthy moments, cuts and converts each to a 1080x1920
+vertical clip, and writes `<clip>.mp4` + `<clip>.txt` pairs — the same
+format `clips/pending/` expects.
+
+**Setup:**
+```
+pip install -r requirements-stream-clipper.txt
+# ffmpeg + ffprobe must be on your PATH (winget/brew/apt install ffmpeg)
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+**Usage:**
+```
+python scripts/stream_clipper.py "D:/OBS/2026-07-05 stream.mkv"
+# or watch a folder and process every finished recording automatically:
+python scripts/stream_clipper.py --watch "D:/OBS"
+```
+Watch mode waits until a file stops growing for 30s (OBS finished writing)
+before processing, and remembers what it already handled in
+`.processed_vods.json`.
+
+**Getting clips into this repo:** set two env vars before running —
+```
+export CLIP_OUTPUT_DIR="/path/to/your/local/clone/clips/pending"
+export GIT_REPO_DIR="/path/to/your/local/clone"
+```
+With both set, finished clips land directly in your local clone's
+`clips/pending/` and get auto-committed and pushed after each recording is
+processed. Leave `GIT_REPO_DIR` unset to just write clips locally without
+touching git.
+
+**Tuning** (top of `stream_clipper.py`): `NUM_CLIPS`, `MIN_CLIP_SEC`/
+`MAX_CLIP_SEC`, `WHISPER_MODEL` (`small` is a good default; set
+`WHISPER_DEVICE = "cuda"` if you have an NVIDIA GPU), `CLAUDE_MODEL`
+(Haiku is cheap/fast; Sonnet picks better moments on chaotic streams), and
+`VERTICAL_MODE` (`blurpad` is a safe default; `centercrop` fills the frame
+but cuts off the sides).
+
+**OBS tip:** record a separate local file at CQP/CRF ~18-20 ("Indistinguishable
+Quality") rather than relying on the Twitch VOD, which gets re-encoded at
+~6-8 Mbps and looks soft after cropping to vertical.
 
 ## One-time setup (you need to do this — I can't create accounts or
 authenticate as you)
@@ -121,9 +220,9 @@ web UI) and push to `main`.
 
 ### 10. Merge this branch to `main`
 The workflows only run from the default branch's schedule. Once merged,
-`daily-post.yml` fires every 2 hours (edit the cron to change timing), the
-token refresh runs weekly, and insights are updated daily. Any of them can
-also be triggered manually from the Actions tab ("Run workflow").
+`daily-post.yml` fires every 45 minutes (edit the cron entries to change
+timing), the token refresh runs weekly, and insights are updated daily. Any
+of them can also be triggered manually from the Actions tab ("Run workflow").
 
 ## Local testing
 
@@ -137,7 +236,8 @@ python scripts/post_daily_clips.py
 ## Notes and limits
 
 - Instagram's Content Publishing API caps an account at 25 posts per rolling
-  24 hours; posting 10/day is well within that.
+  24 hours. The schedule has 32 slots/day, but keep actual clip supply
+  around 20/day (don't push much past ~24) so you stay safely under that cap.
 - Long-lived tokens expire after ~60 days. With `GH_PAT` configured, the
   weekly refresh workflow handles this automatically. Without it, run
   `scripts/refresh_token.py` manually and update the `IG_ACCESS_TOKEN`
